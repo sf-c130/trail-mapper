@@ -438,11 +438,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
     </button>
 
     <!-- FAB -->
-    <button id="fab" class="idle">
-      <svg id="fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-        <path d="M12 5v14M5 12h14"/>
-      </svg>
-    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;position:relative;top:-10px;">
+      <button id="fab" class="idle" style="top:0">
+        <svg id="fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
+      <span id="fab-label" style="font-family:var(--sans);font-size:9px;font-weight:800;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-top:2px;">New Trail</span>
+    </div>
 
     <button class="bar-btn" id="btn-rec">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -472,17 +475,40 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
     <div id="modal-inner">
       <h3>🗺 New Trail</h3>
       <input class="m-in" id="modal-name" placeholder="Trail name (optional)…" maxlength="40" autocomplete="off"/>
-      <div class="slbl">Color</div>
-      <div class="mcrow" id="modal-swatches">
-        <div class="msw on" data-c="#22c55e" style="background:#22c55e"></div>
-        <div class="msw" data-c="#f59e0b" style="background:#f59e0b"></div>
-        <div class="msw" data-c="#ef4444" style="background:#ef4444"></div>
-        <div class="msw" data-c="#8b5cf6" style="background:#8b5cf6"></div>
-        <div class="msw" data-c="#3b82f6" style="background:#3b82f6"></div>
-        <div class="msw" data-c="#ff9800" style="background:#ff9800"></div>
-        <div class="msw" data-c="#fff" style="background:#fff;border-color:#555"></div>
-        <div class="mcc"><input type="color" id="modal-cc" value="#ff6b35"/></div>
+
+      <div class="slbl" style="margin-bottom:10px">Trail Color</div>
+
+      <!-- Color preview bar -->
+      <div id="color-preview-bar" style="height:8px;border-radius:4px;margin-bottom:12px;transition:background .2s;background:#22c55e"></div>
+
+      <!-- Preset swatches — 2 rows -->
+      <div class="mcrow" id="modal-swatches" style="gap:10px;margin-bottom:10px;">
+        <!-- Row 1: common trail colors -->
+        <div class="msw on" data-c="#22c55e" style="background:#22c55e" title="Easy / Green"></div>
+        <div class="msw" data-c="#f59e0b" style="background:#f59e0b" title="Moderate / Amber"></div>
+        <div class="msw" data-c="#ef4444" style="background:#ef4444" title="Difficult / Red"></div>
+        <div class="msw" data-c="#8b5cf6" style="background:#8b5cf6" title="Expert / Purple"></div>
+        <div class="msw" data-c="#3b82f6" style="background:#3b82f6" title="Scenic / Blue"></div>
+        <div class="msw" data-c="#ff9800" style="background:#ff9800" title="ATV / Orange"></div>
+        <div class="msw" data-c="#ec4899" style="background:#ec4899" title="Pink"></div>
+        <div class="msw" data-c="#14b8a6" style="background:#14b8a6" title="Teal"></div>
+        <div class="msw" data-c="#f97316" style="background:#f97316" title="Deep Orange"></div>
+        <div class="msw" data-c="#eab308" style="background:#eab308" title="Yellow"></div>
+        <div class="msw" data-c="#ffffff" style="background:#fff;border-color:#555" title="White"></div>
+        <div class="msw" data-c="#94a3b8" style="background:#94a3b8" title="Gray"></div>
       </div>
+
+      <!-- Custom color picker row -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 12px;background:#090b06;border:1px solid var(--border);border-radius:var(--r);">
+        <input type="color" id="modal-cc" value="#ff6b35"
+          style="width:38px;height:38px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;background:none;overflow:hidden;flex-shrink:0;"/>
+        <div style="flex:1;">
+          <div style="font-size:12px;font-weight:700;color:var(--text);letter-spacing:1px;margin-bottom:2px">CUSTOM COLOR</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--dim)">Tap the circle to pick any color</div>
+        </div>
+        <button id="apply-custom-color" style="padding:7px 12px;border:none;border-radius:var(--r);background:var(--panel2);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;">Use It</button>
+      </div>
+
       <div class="mbtns">
         <button class="mbtn mbtn-g" id="modal-go">＋ Start Drawing</button>
         <button class="mbtn mbtn-x" id="modal-cancel">Cancel</button>
@@ -598,8 +624,10 @@ function syncSwatches(c){
 }
 document.querySelectorAll('.sw').forEach(sw=>sw.addEventListener('click',()=>pickColor(sw.dataset.c)));
 document.getElementById('sb-cc').addEventListener('input',e=>{pickColor(e.target.value);document.querySelectorAll('.sw,.msw').forEach(s=>s.classList.remove('on'));});
-document.querySelectorAll('.msw').forEach(sw=>sw.addEventListener('click',()=>pickColor(sw.dataset.c)));
-document.getElementById('modal-cc').addEventListener('input',e=>{pickColor(e.target.value);document.querySelectorAll('.sw,.msw').forEach(s=>s.classList.remove('on'));});
+document.querySelectorAll('.msw').forEach(sw=>sw.addEventListener('click',()=>{
+  pickColor(sw.dataset.c);
+  updateColorPreview(sw.dataset.c);
+}));
 
 // ── FAB ──
 document.getElementById('fab').addEventListener('click',onFab);
@@ -613,8 +641,12 @@ document.getElementById('modal-cancel').addEventListener('click',()=>document.ge
 
 function onFab(){
   if(fabMode==='idle'){
-    // Show modal bottom sheet
+    // Always allow new trail — even in follow mode
     document.getElementById('modal-name').value='';
+    // Sync modal color preview to current color
+    updateColorPreview(color);
+    syncSwatches(color);
+    document.getElementById('modal-cc').value=color.startsWith('#')&&color.length===7?color:'#ff6b35';
     document.getElementById('trail-modal').classList.add('on');
     setTimeout(()=>document.getElementById('modal-name').focus(),150);
   } else if(fabMode==='drawing'){
@@ -627,18 +659,43 @@ function setFab(mode){
   fabMode=mode;
   const fab=document.getElementById('fab');
   const icon=document.getElementById('fab-icon');
-  fab.className=mode; // idle | drawing | recording
+  const lbl=document.getElementById('fab-label');
+  fab.className=mode;
   if(mode==='idle'){
     icon.innerHTML='<path d="M12 5v14M5 12h14"/>';
     icon.setAttribute('stroke-width','3');
+    lbl.textContent='New Trail';
+    lbl.style.color='var(--dim)';
   } else if(mode==='drawing'){
     icon.innerHTML='<polyline points="20 6 9 17 4 12"/>';
     icon.setAttribute('stroke-width','3');
+    lbl.textContent='Save Trail';
+    lbl.style.color='var(--accent)';
   } else {
     icon.innerHTML='<rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/>';
     icon.setAttribute('stroke-width','2');
+    lbl.textContent='Stop Rec';
+    lbl.style.color='#f55';
   }
 }
+
+// ── COLOR PREVIEW BAR (modal) ──
+function updateColorPreview(c){
+  const bar=document.getElementById('color-preview-bar');
+  if(bar)bar.style.background=c;
+}
+
+// Apply custom color button
+document.getElementById('apply-custom-color').addEventListener('click',()=>{
+  const c=document.getElementById('modal-cc').value;
+  pickColor(c);
+  document.querySelectorAll('.msw').forEach(s=>s.classList.remove('on'));
+  updateColorPreview(c);
+});
+// Live preview as color wheel moves
+document.getElementById('modal-cc').addEventListener('input',e=>{
+  updateColorPreview(e.target.value);
+});
 
 // ── DRAWING ──
 function startDraw(){
