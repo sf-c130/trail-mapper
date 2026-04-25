@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<meta name="theme-color" content="#0f1109"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Trail Mapper"/>
+<meta name="description" content="Offroad GPS trail mapping with Google Maps"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<title>Trail Mapper</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0f1109;--panel:#181c11;--panel2:#1f2416;--border:#363b25;
+  --accent:#c8a84b;--green:#7db33e;--text:#cdc9b2;--dim:#6a6850;
+  --danger:#b84438;--blue:#4285f4;--r:5px;
+  --mono:'Share Tech Mono',monospace;--sans:'Barlow Condensed',sans-serif;
+  --sw:300px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+html,body{
+  height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:var(--sans);-webkit-tap-highlight-color:transparent;
+  overscroll-behavior:none;
+}
+
+/* SETUP */
+#setup{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;}
+.sc{width:400px;max-width:100%;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px 24px;text-align:center;}
+.sl{font-size:26px;font-weight:800;letter-spacing:4px;color:var(--accent);margin-bottom:3px;}
+.ss{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:2px;margin-bottom:22px;}
+.sf-lbl{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--dim);text-transform:uppercase;text-align:left;margin-bottom:5px;}
+.sf-in{width:100%;padding:11px 12px;background:#090b06;border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:13px;outline:none;margin-bottom:6px;transition:border-color .2s;}
+.sf-in:focus{border-color:var(--accent);}
+.sf-in::placeholder{color:var(--dim);}
+.sf-hint{font-size:12px;color:var(--dim);text-align:left;margin-bottom:16px;line-height:1.65;}
+.sf-hint a{color:var(--accent);}
+.sf-btn{width:100%;padding:14px;border:none;border-radius:var(--r);background:var(--green);color:#060a02;font-family:var(--sans);font-size:15px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;}
+.sf-btn:active{background:#90c94a;}
+.sf-err{color:var(--danger);font-family:var(--mono);font-size:11px;margin-top:10px;min-height:14px;}
+
+/* APP */
+#app{position:relative;width:100%;height:100%;padding-top:var(--safe-top);}
+#map{position:absolute;inset:0;top:var(--safe-top);z-index:0;}
+
+/* SIDEBAR */
+#sidebar{
+  position:absolute;top:0;left:0;bottom:0;
+  width:var(--sw);max-width:88vw;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;z-index:100;
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  padding-top:var(--safe-top);
+}
+#sidebar.hidden{transform:translateX(calc(-1 * min(var(--sw), 88vw)));}
+
+#sb-tab{
+  position:absolute;top:50%;right:-40px;transform:translateY(-50%);
+  width:38px;height:68px;
+  background:var(--panel);border:1px solid var(--border);border-left:none;
+  border-radius:0 8px 8px 0;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;z-index:101;touch-action:manipulation;
+}
+#sb-tab:active{background:var(--panel2);}
+#sb-tab svg{transition:transform .28s;}
+#sidebar.hidden #sb-tab svg{transform:rotate(180deg);}
+
+#sb-head{padding:14px 14px 11px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;}
+.logo{font-size:19px;font-weight:800;letter-spacing:3px;color:var(--accent);display:flex;align-items:center;gap:7px;}
+.logo-sub{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:2px;margin-top:2px;}
+
+/* SECTIONS */
+#draw-sec{padding:12px 14px;border-bottom:1px solid var(--border);background:var(--panel2);flex-shrink:0;}
+.slbl{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px;}
+.t-in{width:100%;padding:8px 10px;background:#090b06;border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--sans);font-size:15px;font-weight:600;outline:none;margin-bottom:9px;transition:border-color .2s;}
+.t-in:focus{border-color:var(--accent);}
+.t-in::placeholder{color:var(--dim);}
+
+.crow{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap;}
+.sw{width:28px;height:28px;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:transform .15s;flex-shrink:0;touch-action:manipulation;}
+.sw:active,.sw.on{transform:scale(1.2);border-color:#fff !important;}
+.cc input[type=color]{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;background:none;overflow:hidden;}
+
+.brow{display:flex;gap:6px;}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  padding:10px 12px;border:none;border-radius:var(--r);
+  font-family:var(--sans);font-size:13px;font-weight:800;
+  letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.bf{width:100%;}
+.bg{background:var(--green);color:#060a02;} .bg:active{background:#90c94a;}
+.ba{background:var(--accent);color:#060a02;} .ba:active{background:#dbb55a;}
+.bgh{background:transparent;color:var(--dim);border:1px solid var(--border);}
+.bgh:active{background:var(--panel2);color:var(--text);}
+.bb{background:#1a5fc4;color:#fff;} .bb:active{background:#2270d4;}
+.br{background:var(--danger);color:#fff;} .br:active{background:#cc4040;}
+
+#gps-sec{padding:11px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.grow{display:flex;gap:6px;margin-bottom:8px;}
+#gps-info{font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.85;padding:7px 10px;background:#090b06;border:1px solid var(--border);border-radius:var(--r);display:none;}
+#gps-info.on{display:block;}
+.gv{color:var(--text);}
+
+#status-bar{
+  padding:7px 14px;font-family:var(--mono);font-size:10px;color:var(--dim);
+  display:none;align-items:center;gap:6px;
+  background:rgba(200,168,75,.07);border-bottom:1px solid rgba(200,168,75,.2);
+  flex-shrink:0;
+}
+#status-bar.on{display:flex;}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;animation:pls 1.2s ease-in-out infinite;}
+.dg{background:var(--accent);}.dr{background:#f44;}
+@keyframes pls{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.6)}}
+
+#trail-sec{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:11px 14px;}
+#trail-sec::-webkit-scrollbar{width:3px;}
+#trail-sec::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+#tlist{display:flex;flex-direction:column;gap:6px;}
+
+.tc{background:var(--panel2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;}
+.tc.sel{border-color:var(--accent);}
+.tch{display:flex;align-items:center;gap:8px;padding:10px 10px;}
+.tcb{width:4px;height:34px;border-radius:2px;flex-shrink:0;}
+.tci{flex:1;min-width:0;}
+.tcn{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tcm{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:2px;}
+.tca{display:flex;gap:4px;}
+.ib{
+  width:34px;height:34px;border-radius:var(--r);
+  background:transparent;border:1px solid var(--border);
+  color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  touch-action:manipulation;
+}
+.ib:active{background:var(--panel);color:var(--text);}
+.ib.dl:active{background:var(--danger);color:#fff;border-color:var(--danger);}
+
+.empty{text-align:center;padding:32px 14px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:2;}
+
+#cbar{
+  padding:8px 14px;border-top:1px solid var(--border);
+  font-family:var(--mono);font-size:9px;color:var(--dim);
+  display:flex;justify-content:space-between;background:var(--bg);
+  flex-wrap:wrap;gap:3px;flex-shrink:0;
+  padding-bottom:calc(8px + var(--safe-bottom));
+}
+#rkey{font-family:var(--mono);font-size:9px;color:var(--dim);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0;touch-action:manipulation;}
+
+/* SEARCH BAR */
+#search-wrap{
+  position:absolute;z-index:50;
+  top:calc(12px + var(--safe-top));
+  left:50%;transform:translateX(-50%);
+  width:min(340px,78vw);
+}
+#search-row{
+  display:flex;
+  box-shadow:0 4px 18px rgba(0,0,0,.55);border-radius:var(--r);overflow:visible;
+}
+#search-input{
+  flex:1;padding:12px 14px;border:none;border-radius:var(--r) 0 0 var(--r);
+  background:rgba(15,17,9,.94);backdrop-filter:blur(10px);
+  color:var(--text);font-family:var(--sans);font-size:14px;font-weight:600;
+  outline:none;border:1px solid var(--border);border-right:none;
+}
+#search-input::placeholder{color:var(--dim);}
+#search-input:focus{border-color:var(--accent);}
+#search-btn{
+  padding:12px 14px;border:1px solid var(--border);border-left:none;border-radius:0 var(--r) var(--r) 0;
+  background:rgba(15,17,9,.94);backdrop-filter:blur(10px);
+  color:var(--text);cursor:pointer;display:flex;align-items:center;
+  touch-action:manipulation;
+}
+#search-btn:active{color:var(--accent);}
+#search-results{
+  position:absolute;top:calc(100% + 5px);left:0;right:0;
+  background:rgba(20,23,14,.97);backdrop-filter:blur(10px);
+  border:1px solid var(--border);border-radius:var(--r);
+  display:none;max-height:220px;overflow-y:auto;
+  box-shadow:0 6px 20px rgba(0,0,0,.5);
+}
+#search-results.on{display:block;}
+.sr{padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);touch-action:manipulation;}
+.sr:last-child{border-bottom:none;}
+.sr:active{background:var(--panel2);}
+.sr-n{font-size:13px;font-weight:700;}
+.sr-a{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:2px;}
+
+/* MAP TOOL BUTTONS */
+#mtools{
+  position:absolute;right:12px;z-index:50;
+  top:calc(12px + var(--safe-top));
+  display:flex;flex-direction:column;gap:5px;
+}
+.mt{
+  width:40px;height:40px;background:rgba(15,17,9,.9);backdrop-filter:blur(8px);
+  border:1px solid var(--border);border-radius:var(--r);
+  color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:17px;touch-action:manipulation;
+}
+.mt:active{border-color:var(--accent);}
+.mt.on{border-color:var(--green);}
+
+/* GPS DOT */
+.gps-wrap{position:absolute;transform:translate(-50%,-50%);pointer-events:none;z-index:40;}
+.gps-ring{position:absolute;width:32px;height:32px;top:-8px;left:-8px;border-radius:50%;background:rgba(66,133,244,.12);border:1.5px solid rgba(66,133,244,.3);animation:gpsp 2s ease-out infinite;}
+.gps-core{width:16px;height:16px;border-radius:50%;background:#4285f4;border:2.5px solid #fff;box-shadow:0 0 10px rgba(66,133,244,.8);}
+@keyframes gpsp{0%{transform:scale(1);opacity:1}100%{transform:scale(2.4);opacity:0}}
+
+/* GPS PERMISSION PROMPT */
+#gps-prompt{
+  position:absolute;bottom:calc(60px + var(--safe-bottom));left:50%;transform:translateX(-50%);
+  z-index:200;background:rgba(13,15,8,.96);backdrop-filter:blur(12px);
+  border:1px solid var(--accent);border-radius:var(--r);
+  padding:16px 18px;text-align:center;width:min(310px,90vw);
+  display:none;box-shadow:0 6px 24px rgba(0,0,0,.6);
+}
+#gps-prompt.on{display:block;}
+#gps-prompt p{font-size:13px;color:var(--text);margin-bottom:10px;line-height:1.55;}
+#gps-prompt small{font-family:var(--mono);font-size:10px;color:var(--dim);}
+
+/* INSTALL BANNER */
+#install-bar{
+  position:absolute;bottom:0;left:0;right:0;z-index:300;
+  background:var(--panel2);border-top:1px solid var(--accent);
+  padding:12px 16px;padding-bottom:calc(12px + var(--safe-bottom));
+  display:none;align-items:center;gap:12px;
+}
+#install-bar.on{display:flex;}
+#install-bar p{flex:1;font-size:13px;color:var(--text);line-height:1.4;}
+#install-bar p span{color:var(--accent);font-weight:700;}
+.inst-btn{padding:9px 14px;border:none;border-radius:var(--r);background:var(--green);color:#060a02;font-family:var(--sans);font-size:12px;font-weight:800;letter-spacing:1px;cursor:pointer;white-space:nowrap;touch-action:manipulation;flex-shrink:0;}
+.inst-close{background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:4px;touch-action:manipulation;}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:calc(24px + var(--safe-bottom));left:50%;
+  transform:translateX(-50%) translateY(8px);z-index:9999;
+  background:rgba(24,28,17,.97);border:1px solid var(--accent);border-radius:var(--r);
+  padding:10px 18px;font-family:var(--mono);font-size:11px;color:var(--accent);
+  opacity:0;transition:all .22s;pointer-events:none;white-space:nowrap;
+  box-shadow:0 4px 18px rgba(0,0,0,.5);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup">
+  <div class="sc">
+    <div class="sl">⛰ TRAIL MAPPER</div>
+    <div class="ss">OFFROAD · GPS · GOOGLE MAPS</div>
+    <div class="sf-lbl">Google Maps API Key</div>
+    <input class="sf-in" id="key-in" type="text" placeholder="AIza..." autocomplete="off" spellcheck="false" inputmode="text"/>
+    <div class="sf-hint">
+      Enable <strong>Maps JavaScript API</strong> &amp; <strong>Places API</strong> in
+      <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a>.
+      Your key is stored only on this device.
+    </div>
+    <button class="sf-btn" id="launch-btn">Launch Trail Mapper</button>
+    <div class="sf-err" id="sf-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div id="map"></div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sb-tab">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </div>
+
+    <div id="sb-head">
+      <div class="logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 17l4-8 4 4 3-6 4 10"/><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/></svg>
+        Trail Mapper
+      </div>
+      <div class="logo-sub">OFFROAD GPS · GOOGLE MAPS</div>
+    </div>
+
+    <div id="draw-sec">
+      <div class="slbl">New Trail</div>
+      <input class="t-in" id="tname" placeholder="Trail name…" maxlength="40" autocomplete="off"/>
+      <div class="slbl">Color</div>
+      <div class="crow" id="swatches">
+        <div class="sw on" data-c="#22c55e" style="background:#22c55e"></div>
+        <div class="sw" data-c="#f59e0b" style="background:#f59e0b"></div>
+        <div class="sw" data-c="#ef4444" style="background:#ef4444"></div>
+        <div class="sw" data-c="#8b5cf6" style="background:#8b5cf6"></div>
+        <div class="sw" data-c="#3b82f6" style="background:#3b82f6"></div>
+        <div class="sw" data-c="#ff9800" style="background:#ff9800"></div>
+        <div class="sw" data-c="#fff" style="background:#fff;border-color:#555"></div>
+        <div class="cc"><input type="color" id="cc" value="#ff6b35"/></div>
+      </div>
+      <div id="draw-idle">
+        <button class="btn bg bf" id="start-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Draw Trail
+        </button>
+      </div>
+      <div id="draw-on" style="display:none">
+        <div class="brow">
+          <button class="btn ba" id="finish-btn" style="flex:1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Save Trail
+          </button>
+          <button class="btn bgh" id="cancel-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="gps-sec">
+      <div class="slbl">GPS</div>
+      <div class="grow">
+        <button class="btn bb" id="gps-btn" style="flex:1">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          Locate Me
+        </button>
+        <button class="btn bgh" id="follow-btn" title="Follow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+        </button>
+        <button class="btn bgh" id="rec-btn" title="Record Track">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <div id="gps-info">
+        <div>LAT <span class="gv" id="g-lat">—</span> &nbsp;LNG <span class="gv" id="g-lng">—</span></div>
+        <div>ALT <span class="gv" id="g-alt">—</span> &nbsp;ACC ±<span class="gv" id="g-acc">—</span></div>
+        <div>SPD <span class="gv" id="g-spd">—</span> &nbsp;HDG <span class="gv" id="g-hdg">—</span></div>
+      </div>
+    </div>
+
+    <div id="status-bar">
+      <div class="dot dg" id="sdot"></div>
+      <span id="stxt">Tap map to place waypoints</span>
+    </div>
+
+    <div id="trail-sec">
+      <div class="slbl">Saved Trails (<span id="tcnt">0</span>)</div>
+      <div id="tlist"><div class="empty">No trails yet.<br/>Draw one or record a GPS track.</div></div>
+    </div>
+
+    <div id="cbar">
+      <span id="clat">LAT —</span>
+      <span id="clng">LNG —</span>
+      <span id="czoom">Z —</span>
+      <button id="rkey">⚙ API Key</button>
+    </div>
+  </div>
+
+  <!-- SEARCH -->
+  <div id="search-wrap">
+    <div id="search-row">
+      <input id="search-input" type="search" placeholder="Search location…" autocomplete="off" enterkeyhint="search"/>
+      <button id="search-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+  <!-- MAP TOOLS -->
+  <div id="mtools">
+    <button class="mt on" id="mt-h" title="Hybrid">🛰</button>
+    <button class="mt" id="mt-s" title="Satellite">📡</button>
+    <button class="mt" id="mt-t" title="Terrain">🏔</button>
+    <button class="mt" id="mt-r" title="Road">🗺</button>
+  </div>
+
+  <!-- GPS PERMISSION PROMPT -->
+  <div id="gps-prompt">
+    <p>📍 Tap below to enable GPS location.<br/>Allow location when your browser asks.</p>
+    <button class="btn bb bf" id="allow-gps-btn" style="margin-bottom:10px">Enable GPS Now</button>
+    <br/><small>Your location is never shared or stored remotely.</small>
+  </div>
+
+  <!-- INSTALL BANNER -->
+  <div id="install-bar">
+    <p>Add <span>Trail Mapper</span> to your home screen for the full app experience.</p>
+    <button class="inst-btn" id="install-btn">Install</button>
+    <button class="inst-close" id="install-close">✕</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// SERVICE WORKER REGISTRATION
+// ─────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      console.log('SW registered:', reg.scope);
+    }).catch(err => console.log('SW error:', err));
+  });
+}
+
+// ─────────────────────────────────────────────
+// PWA INSTALL PROMPT
+// ─────────────────────────────────────────────
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  // Show banner after 3s if not already installed
+  setTimeout(() => {
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+      document.getElementById('install-bar').classList.add('on');
+    }
+  }, 3000);
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  const { outcome } = await deferredInstall.userChoice;
+  deferredInstall = null;
+  document.getElementById('install-bar').classList.remove('on');
+  if (outcome === 'accepted') showToast('Trail Mapper installed!');
+});
+document.getElementById('install-close').addEventListener('click', () => {
+  document.getElementById('install-bar').classList.remove('on');
+});
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let gMap, trails=[], nextId=1, selId=null;
+let drawing=false, recMode=false, followMode=false;
+let curPts=[], tempLine=null, tempDots=[];
+let color='#22c55e';
+let gpsWatch=null, gpsDotEl=null, gpsCircle=null, gpsPos=null;
+let searchMark=null, apiKey='';
+
+// ─────────────────────────────────────────────
+// SETUP / API KEY
+// ─────────────────────────────────────────────
+const savedKey = localStorage.getItem('tm_key');
+if (savedKey) { apiKey = savedKey; boot(savedKey); }
+
+document.getElementById('launch-btn').addEventListener('click', () => {
+  const k = document.getElementById('key-in').value.trim();
+  if (!k || !k.startsWith('AIza')) {
+    document.getElementById('sf-err').textContent = 'Enter a valid key starting with AIza…';
+    return;
+  }
+  document.getElementById('sf-err').textContent = '';
+  apiKey = k; localStorage.setItem('tm_key', k); boot(k);
+});
+document.getElementById('key-in').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('launch-btn').click(); });
+document.getElementById('rkey').addEventListener('click', () => {
+  if (!confirm('Reset API key and reload?')) return;
+  localStorage.removeItem('tm_key'); location.reload();
+});
+
+function boot(key) {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  window._gMapCb = initMap;
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=_gMapCb&v=weekly`;
+  s.async = true;
+  s.onerror = () => {
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('setup').style.display = 'flex';
+    document.getElementById('sf-err').textContent = 'Could not load Google Maps. Check your API key & that Maps JavaScript API is enabled.';
+    localStorage.removeItem('tm_key');
+  };
+  document.head.appendChild(s);
+}
+
+// ─────────────────────────────────────────────
+// MAP INIT
+// ─────────────────────────────────────────────
+function initMap() {
+  gMap = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 36.5, lng: -115.0 }, zoom: 11,
+    mapTypeId: 'hybrid',
+    disableDefaultUI: true,
+    zoomControl: true,
+    zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+    gestureHandling: 'greedy',
+    clickableIcons: false
+  });
+  gMap.addListener('click', onMapClick);
+  gMap.addListener('mousemove', e => {
+    document.getElementById('clat').textContent = 'LAT ' + e.latLng.lat().toFixed(5);
+    document.getElementById('clng').textContent = 'LNG ' + e.latLng.lng().toFixed(5);
+  });
+  gMap.addListener('zoom_changed', () => document.getElementById('czoom').textContent = 'Z' + gMap.getZoom());
+  gMap.addListener('bounds_changed', posGPSDot);
+  document.getElementById('czoom').textContent = 'Z' + gMap.getZoom();
+
+  [{ id: 'mt-h', t: 'hybrid' }, { id: 'mt-s', t: 'satellite' }, { id: 'mt-t', t: 'terrain' }, { id: 'mt-r', t: 'roadmap' }]
+    .forEach(({ id, t }) => {
+      document.getElementById(id).addEventListener('click', () => {
+        gMap.setMapTypeId(t);
+        document.querySelectorAll('.mt').forEach(b => b.classList.remove('on'));
+        document.getElementById(id).classList.add('on');
+      });
+    });
+  initSearch();
+}
+
+// ─────────────────────────────────────────────
+// SIDEBAR
+// ─────────────────────────────────────────────
+document.getElementById('sb-tab').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('hidden');
+});
+
+// ─────────────────────────────────────────────
+// COLOR
+// ─────────────────────────────────────────────
+document.querySelectorAll('.sw').forEach(sw => {
+  sw.addEventListener('click', () => {
+    document.querySelectorAll('.sw').forEach(s => s.classList.remove('on'));
+    sw.classList.add('on'); color = sw.dataset.c;
+    if (tempLine) tempLine.setOptions({ strokeColor: color });
+  });
+});
+document.getElementById('cc').addEventListener('input', e => {
+  color = e.target.value;
+  document.querySelectorAll('.sw').forEach(s => s.classList.remove('on'));
+  if (tempLine) tempLine.setOptions({ strokeColor: color });
+});
+
+// ─────────────────────────────────────────────
+// DRAWING
+// ─────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startDraw);
+document.getElementById('finish-btn').addEventListener('click', finishDraw);
+document.getElementById('cancel-btn').addEventListener('click', cancelDraw);
+
+function startDraw() {
+  if (!gMap) return;
+  drawing = true; curPts = [];
+  gMap.setOptions({ draggableCursor: 'crosshair' });
+  document.getElementById('draw-idle').style.display = 'none';
+  document.getElementById('draw-on').style.display = '';
+  document.getElementById('status-bar').classList.add('on');
+  document.getElementById('sdot').className = 'dot dg';
+  // Auto-hide sidebar on mobile to show map
+  if (window.innerWidth < 600) document.getElementById('sidebar').classList.add('hidden');
+  updStat();
+}
+function onMapClick(e) {
+  if (!drawing) return;
+  addPt({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+}
+function addPt(pt) {
+  curPts.push(pt);
+  if (!tempLine) {
+    tempLine = new google.maps.Polyline({
+      path: curPts, map: gMap, strokeColor: color,
+      strokeWeight: 5, strokeOpacity: .88,
+      icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 2.5, fillColor: color, fillOpacity: 1, strokeWeight: 0 }, repeat: '100px' }]
+    });
+  } else { tempLine.setPath(curPts); }
+  const d = new google.maps.Circle({ center: pt, radius: 5, strokeColor: color, strokeWeight: 1.5, fillColor: '#fff', fillOpacity: .95, map: gMap, zIndex: 10 });
+  tempDots.push(d);
+  updStat();
+}
+function finishDraw() {
+  if (curPts.length < 2) { showToast('Add at least 2 points'); return; }
+  const name = document.getElementById('tname').value.trim() || 'Trail ' + nextId;
+  saveTrail(name, [...curPts], color, 'manual');
+  clearDraw();
+}
+function cancelDraw() { clearDraw(); }
+function clearDraw() {
+  drawing = false; curPts = [];
+  if (tempLine) { tempLine.setMap(null); tempLine = null; }
+  tempDots.forEach(d => d.setMap(null)); tempDots = [];
+  if (gMap) gMap.setOptions({ draggableCursor: null });
+  document.getElementById('draw-idle').style.display = '';
+  document.getElementById('draw-on').style.display = 'none';
+  if (!recMode) document.getElementById('status-bar').classList.remove('on');
+}
+function updStat() {
+  const n = curPts.length, km = n >= 2 ? calcKm(curPts) : 0;
+  document.getElementById('stxt').textContent =
+    recMode ? `● REC · ${n} pts · ${km} km`
+    : n === 0 ? 'Tap map to place waypoints'
+    : n === 1 ? '1 point — keep tapping'
+    : `${n} pts · ${km} km`;
+}
+
+// ─────────────────────────────────────────────
+// GPS
+// ─────────────────────────────────────────────
+document.getElementById('gps-btn').addEventListener('click', () => {
+  document.getElementById('gps-prompt').classList.add('on');
+});
+document.getElementById('allow-gps-btn').addEventListener('click', doLocate);
+document.getElementById('follow-btn').addEventListener('click', toggleFollow);
+document.getElementById('rec-btn').addEventListener('click', toggleRec);
+
+function doLocate() {
+  document.getElementById('gps-prompt').classList.remove('on');
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
+  showToast('Requesting GPS…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      onGPS(pos);
+      if (!gpsWatch) {
+        gpsWatch = navigator.geolocation.watchPosition(onGPS, gpsErr, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+      }
+    },
+    err => {
+      if (err.code === 1) { showPermHelp(); }
+      else { gpsErr(err); }
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+}
+function showPermHelp() {
+  const p = document.getElementById('gps-prompt');
+  p.innerHTML = `<p style="margin-bottom:10px">📍 Location was denied.</p>
+    <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px">
+      In Chrome: tap the 🔒 icon in the address bar → <strong>Site settings</strong> → <strong>Location</strong> → <strong>Allow</strong>.<br/>Then tap try again.
+    </p>
+    <button class="btn bb bf" id="retry-gps-btn" style="margin-bottom:8px">Try Again</button>`;
+  p.classList.add('on');
+  document.getElementById('retry-gps-btn').addEventListener('click', () => { p.classList.remove('on'); doLocate(); });
+}
+function toggleFollow() {
+  followMode = !followMode;
+  document.getElementById('follow-btn').className = followMode ? 'btn bb' : 'btn bgh';
+  if (followMode && gpsPos && gMap) gMap.panTo(gpsPos);
+  showToast(followMode ? 'Follow mode ON' : 'Follow mode OFF');
+}
+function toggleRec() {
+  if (!gpsWatch) { document.getElementById('gps-prompt').classList.add('on'); return; }
+  recMode = !recMode;
+  document.getElementById('rec-btn').className = recMode ? 'btn br' : 'btn bgh';
+  document.getElementById('sdot').className = recMode ? 'dot dr' : 'dot dg';
+  if (recMode) {
+    if (!drawing) startDraw();
+    document.getElementById('status-bar').classList.add('on');
+    showToast('Recording GPS track…');
+  } else {
+    if (curPts.length >= 2) {
+      const name = document.getElementById('tname').value.trim() || 'GPS Track ' + nextId;
+      saveTrail(name, [...curPts], color, 'gps');
+      showToast('GPS track saved!');
+    } else { showToast('Too few points recorded'); }
+    recMode = false;
+    clearDraw();
+    document.getElementById('status-bar').classList.remove('on');
+  }
+  updStat();
+}
+function onGPS(pos) {
+  const { latitude: lat, longitude: lng, altitude: alt, accuracy: acc, speed: spd, heading: hdg } = pos.coords;
+  gpsPos = { lat, lng };
+  document.getElementById('gps-info').classList.add('on');
+  document.getElementById('g-lat').textContent = lat.toFixed(6);
+  document.getElementById('g-lng').textContent = lng.toFixed(6);
+  document.getElementById('g-alt').textContent = alt != null ? Math.round(alt) + ' m' : '—';
+  document.getElementById('g-acc').textContent = Math.round(acc) + ' m';
+  document.getElementById('g-spd').textContent = spd != null ? (spd * 3.6).toFixed(1) + ' kph' : '—';
+  document.getElementById('g-hdg').textContent = hdg != null ? Math.round(hdg) + '°' : '—';
+  if (!gMap) return;
+  if (!gpsDotEl) {
+    gpsDotEl = document.createElement('div');
+    gpsDotEl.className = 'gps-wrap';
+    gpsDotEl.innerHTML = '<div class="gps-ring"></div><div class="gps-core"></div>';
+    document.getElementById('map').appendChild(gpsDotEl);
+    showToast('GPS locked · ±' + Math.round(acc) + 'm');
+  }
+  posGPSDot();
+  if (!gpsCircle) {
+    gpsCircle = new google.maps.Circle({ center: gpsPos, radius: acc, strokeColor: '#4285f4', strokeOpacity: .3, strokeWeight: 1, fillColor: '#4285f4', fillOpacity: .05, map: gMap, zIndex: 1 });
+  } else { gpsCircle.setCenter(gpsPos); gpsCircle.setRadius(acc); }
+  if (followMode) gMap.panTo(gpsPos);
+  if (recMode) {
+    const last = curPts[curPts.length - 1];
+    if (!last || haversineM(last.lat, last.lng, lat, lng) > 8) addPt({ lat, lng });
+  }
+}
+function posGPSDot() {
+  if (!gpsDotEl || !gMap || !gpsPos) return;
+  const b = gMap.getBounds(); if (!b) return;
+  const ne = b.getNorthEast(), sw = b.getSouthWest();
+  const el = document.getElementById('map');
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const lr = ne.lng() - sw.lng(), lar = ne.lat() - sw.lat();
+  if (!lr || !lar) return;
+  gpsDotEl.style.left = ((gpsPos.lng - sw.lng()) / lr * w) + 'px';
+  gpsDotEl.style.top = ((1 - (gpsPos.lat - sw.lat()) / lar) * h) + 'px';
+}
+function gpsErr(e) {
+  const m = { 1: 'Location permission denied', 2: 'GPS signal unavailable', 3: 'GPS timed out' };
+  showToast(m[e.code] || 'GPS error');
+  if (e.code === 1) showPermHelp();
+}
+
+// ─────────────────────────────────────────────
+// SEARCH
+// ─────────────────────────────────────────────
+function initSearch() {
+  const input = document.getElementById('search-input');
+  const btn = document.getElementById('search-btn');
+  const results = document.getElementById('search-results');
+  const svc = new google.maps.places.AutocompleteService();
+  const ps = new google.maps.places.PlacesService(gMap);
+  let timer;
+
+  function runSearch(q) {
+    if (q.length < 3) { results.classList.remove('on'); results.innerHTML = ''; return; }
+    svc.getQueryPredictions({ input: q }, (preds, stat) => {
+      results.innerHTML = '';
+      if (stat !== google.maps.places.PlacesServiceStatus.OK || !preds) { results.classList.remove('on'); return; }
+      preds.slice(0, 5).forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'sr';
+        div.innerHTML = `<div class="sr-n">${escH(p.structured_formatting?.main_text || p.description)}</div><div class="sr-a">${escH(p.structured_formatting?.secondary_text || '')}</div>`;
+        div.addEventListener('click', () => {
+          results.classList.remove('on'); input.value = p.description; input.blur();
+          ps.getDetails({ placeId: p.place_id, fields: ['geometry', 'name'] }, (place, s) => {
+            if (s === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
+              gMap.panTo(place.geometry.location); gMap.setZoom(14);
+              if (searchMark) searchMark.setMap(null);
+              searchMark = new google.maps.Marker({
+                position: place.geometry.location, map: gMap, title: place.name,
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
+              });
+              showToast('→ ' + place.name);
+            }
+          });
+        });
+        results.appendChild(div);
+      });
+      results.classList.add('on');
+    });
+  }
+
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => runSearch(input.value.trim()), 300); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); btn.click(); } });
+  btn.addEventListener('click', () => {
+    const q = input.value.trim(); if (!q) return;
+    svc.getQueryPredictions({ input: q }, (preds, stat) => {
+      if (stat === google.maps.places.PlacesServiceStatus.OK && preds?.[0]) {
+        ps.getDetails({ placeId: preds[0].place_id, fields: ['geometry', 'name'] }, (place, s) => {
+          if (s === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
+            gMap.panTo(place.geometry.location); gMap.setZoom(14);
+            if (searchMark) searchMark.setMap(null);
+            searchMark = new google.maps.Marker({ position: place.geometry.location, map: gMap, title: place.name, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 } });
+            results.classList.remove('on'); input.blur();
+            showToast('→ ' + place.name);
+          }
+        });
+      }
+    });
+  });
+  document.addEventListener('touchstart', e => { if (!document.getElementById('search-wrap').contains(e.target)) results.classList.remove('on'); });
+}
+
+// ─────────────────────────────────────────────
+// TRAIL MANAGEMENT
+// ─────────────────────────────────────────────
+function saveTrail(name, pts, col, type) {
+  const id = nextId++;
+  const poly = new google.maps.Polyline({
+    path: pts, map: gMap, strokeColor: col, strokeWeight: 5, strokeOpacity: .92,
+    icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 2.5, fillColor: col, fillOpacity: 1, strokeWeight: 0 }, repeat: '100px' }]
+  });
+  poly.addListener('click', () => selTrail(id));
+  const sm = mkPin(pts[0], col, false), em = mkPin(pts[pts.length - 1], col, true);
+  trails.push({ id, name, color: col, points: pts, poly, sm, em, visible: true, type, dist: calcKm(pts) });
+  renderList(); selTrail(id);
+  showToast(`"${name}" saved · ${calcKm(pts)} km`);
+}
+function mkPin(pos, col, end) {
+  const inner = end ? `<rect x="4" y="4" width="6" height="6" rx="1" fill="#fff" opacity=".8"/>` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><circle cx="7" cy="7" r="6" fill="${col}" stroke="rgba(0,0,0,.5)" stroke-width="1.5"/>${inner}</svg>`;
+  return new google.maps.Marker({ position: pos, map: gMap, clickable: false, icon: { url: 'data:image/svg+xml,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(14, 14), anchor: new google.maps.Point(7, 7) } });
+}
+function renderList() {
+  const list = document.getElementById('tlist');
+  document.getElementById('tcnt').textContent = trails.length;
+  if (!trails.length) { list.innerHTML = '<div class="empty">No trails yet.<br/>Draw one or record a GPS track.</div>'; return; }
+  list.innerHTML = '';
+  [...trails].reverse().forEach(t => {
+    const d = document.createElement('div');
+    d.className = 'tc' + (t.id === selId ? ' sel' : '');
+    d.innerHTML = `<div class="tch">
+      <div class="tcb" style="background:${t.color}"></div>
+      <div class="tci">
+        <div class="tcn">${escH(t.name)}</div>
+        <div class="tcm">${t.points.length} pts · ${t.dist} km${t.type === 'gps' ? ' · GPS' : ''}</div>
+      </div>
+      <div class="tca">
+        <button class="ib vis" data-id="${t.id}">${t.visible ? eyeI() : eyeOffI()}</button>
+        <button class="ib dl" data-id="${t.id}">${trashI()}</button>
+      </div>
+    </div>`;
+    d.querySelector('.tci').addEventListener('click', () => {
+      selTrail(t.id); zoomTo(t);
+      document.getElementById('sidebar').classList.add('hidden');
+    });
+    d.querySelector('.vis').addEventListener('click', e => { e.stopPropagation(); togVis(t.id); });
+    d.querySelector('.dl').addEventListener('click', e => { e.stopPropagation(); delTrail(t.id); });
+    list.appendChild(d);
+  });
+}
+function selTrail(id) { selId = id; renderList(); }
+function zoomTo(t) { const b = new google.maps.LatLngBounds(); t.points.forEach(p => b.extend(p)); gMap.fitBounds(b, 60); }
+function togVis(id) {
+  const t = trails.find(x => x.id === id); if (!t) return;
+  t.visible = !t.visible;
+  [t.poly, t.sm, t.em].forEach(l => { if (l) l.setMap(t.visible ? gMap : null); });
+  renderList();
+}
+function delTrail(id) {
+  const i = trails.findIndex(x => x.id === id); if (i === -1) return;
+  const t = trails[i];
+  [t.poly, t.sm, t.em].forEach(l => { if (l) l.setMap(null); });
+  trails.splice(i, 1); if (selId === id) selId = null;
+  renderList(); showToast(`"${t.name}" deleted`);
+}
+
+// ─────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────
+function calcKm(pts) { let d = 0; for (let i = 1; i < pts.length; i++) d += haversineM(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng) / 1000; return d.toFixed(2); }
+function haversineM(la1, lo1, la2, lo2) { const R = 6371000, r = x => x * Math.PI / 180, dL = r(la2 - la1), dLo = r(lo2 - lo1), a = Math.sin(dL / 2) ** 2 + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.sin(dLo / 2) ** 2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
+function escH(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000); }
+function eyeI() { return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`; }
+function eyeOffI() { return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`; }
+function trashI() { return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`; }
+</script>
+</body>
+</html>
