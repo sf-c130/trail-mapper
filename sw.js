@@ -1,7 +1,10 @@
 const CACHE = 'trail-mapper-v1';
 const PRECACHE = [
-  '/',
-  '/index.html',
+  '/trail-mapper/',
+  '/trail-mapper/index.html',
+  '/trail-mapper/manifest.json',
+  '/trail-mapper/icon-192.png',
+  '/trail-mapper/icon-512.png',
   'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Share+Tech+Mono&display=swap'
 ];
 
@@ -43,7 +46,7 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return res;
-      }).catch(() => caches.match('/index.html'));
+      }).catch(() => caches.match('/trail-mapper/index.html'));
     })
   );
 });
