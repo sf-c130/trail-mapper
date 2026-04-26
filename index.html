@@ -513,6 +513,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
         <button class="mbtn mbtn-g" id="modal-go">＋ Start Drawing</button>
         <button class="mbtn mbtn-x" id="modal-cancel">Cancel</button>
       </div>
+      <div style="margin-top:10px;">
+        <button class="mbtn" id="modal-quick" style="width:100%;background:var(--panel2);color:var(--accent);border:1px solid var(--accent);letter-spacing:1.5px;">
+          ⚡ Quick Start — auto color, name later
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -532,6 +537,15 @@ let color='#22c55e';
 let gpsWatch=null,gpsDotEl=null,gpsCircle=null,gpsPos=null,searchMark=null;
 let fabMode='idle'; // idle | drawing | recording
 let sidebarOpen=false;
+
+// Auto-color palette — cycles through these on Quick Start
+const AUTO_COLORS=['#22c55e','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ff9800','#ec4899','#14b8a6','#eab308','#f97316'];
+let colorIdx=0;
+function nextAutoColor(){
+  const c=AUTO_COLORS[colorIdx%AUTO_COLORS.length];
+  colorIdx++;
+  return c;
+}
 
 // ── SETUP / BOOT ──
 const savedKey=localStorage.getItem('tm_key');
@@ -589,6 +603,7 @@ function initMap(){
     });
   });
   initSearch();
+  loadTrails(); // restore persisted trails
 }
 
 // ── SIDEBAR ──
@@ -631,6 +646,15 @@ document.querySelectorAll('.msw').forEach(sw=>sw.addEventListener('click',()=>{
 
 // ── FAB ──
 document.getElementById('fab').addEventListener('click',onFab);
+document.getElementById('modal-quick').addEventListener('click',()=>{
+  // Instantly start drawing with next auto color — skip naming
+  document.getElementById('trail-modal').classList.remove('on');
+  document.getElementById('tname').value=''; // will get auto name on save
+  const c=nextAutoColor();
+  pickColor(c);
+  startDraw();
+  showToast(`Drawing with ${c} — name it after saving`);
+});
 document.getElementById('modal-go').addEventListener('click',()=>{
   const n=document.getElementById('modal-name').value.trim();
   if(n)document.getElementById('tname').value=n;
@@ -904,7 +928,7 @@ function saveTrail(name,pts,col,type){
   poly.addListener('click',()=>{selTrail(id);openSidebar();});
   const sm=mkPin(pts[0],col,false),em=mkPin(pts[pts.length-1],col,true);
   trails.push({id,name,color:col,points:pts,poly,sm,em,visible:true,type,dist:calcKm(pts)});
-  renderList();selTrail(id);showToast(`"${name}" saved · ${calcKm(pts)} km`);
+  renderList();selTrail(id);persistTrails();showToast(`"${name}" saved · ${calcKm(pts)} km`);
 }
 function mkPin(pos,col,end){
   const inner=end?`<rect x="4" y="4" width="6" height="6" rx="1" fill="#fff" opacity=".8"/>`:'';
@@ -926,11 +950,13 @@ function renderList(){
         <div class="tcm">${t.points.length} pts · ${t.dist} km${t.type==='gps'?' · GPS':''}</div>
       </div>
       <div class="tca">
+        <button class="ib ren" data-id="${t.id}" title="Rename">${penI()}</button>
         <button class="ib vis" data-id="${t.id}">${t.visible?eyeI():eyeOffI()}</button>
         <button class="ib dl" data-id="${t.id}">${trashI()}</button>
       </div>
     </div>`;
     d.querySelector('.tci').addEventListener('click',()=>{selTrail(t.id);zoomTo(t);if(window.innerWidth<700)closeSidebar();});
+    d.querySelector('.ren').addEventListener('click',e=>{e.stopPropagation();renameTrail(t.id);});
     d.querySelector('.vis').addEventListener('click',e=>{e.stopPropagation();togVis(t.id);});
     d.querySelector('.dl').addEventListener('click',e=>{e.stopPropagation();delTrail(t.id);});
     list.appendChild(d);
@@ -938,12 +964,68 @@ function renderList(){
 }
 function selTrail(id){selId=id;renderList();}
 function zoomTo(t){const b=new google.maps.LatLngBounds();t.points.forEach(p=>b.extend(p));gMap.fitBounds(b,60);}
-function togVis(id){const t=trails.find(x=>x.id===id);if(!t)return;t.visible=!t.visible;[t.poly,t.sm,t.em].forEach(l=>{if(l)l.setMap(t.visible?gMap:null);});renderList();}
+function togVis(id){const t=trails.find(x=>x.id===id);if(!t)return;t.visible=!t.visible;[t.poly,t.sm,t.em].forEach(l=>{if(l)l.setMap(t.visible?gMap:null);});renderList();persistTrails();}
 function delTrail(id){
   const i=trails.findIndex(x=>x.id===id);if(i===-1)return;
   const t=trails[i];[t.poly,t.sm,t.em].forEach(l=>{if(l)l.setMap(null);});
   trails.splice(i,1);if(selId===id)selId=null;
-  renderList();showToast(`"${t.name}" deleted`);
+  renderList();persistTrails();showToast(`"${t.name}" deleted`);
+}
+
+// ── PERSISTENCE ──
+function persistTrails(){
+  try{
+    const data=trails.map(t=>({
+      id:t.id,name:t.name,color:t.color,
+      points:t.points,visible:t.visible,
+      type:t.type,dist:t.dist
+    }));
+    localStorage.setItem('tm_trails',JSON.stringify(data));
+    localStorage.setItem('tm_nextId',String(nextId));
+    localStorage.setItem('tm_colorIdx',String(colorIdx));
+  }catch(e){showToast('Storage full — older trails may not save');}
+}
+
+function loadTrails(){
+  try{
+    const raw=localStorage.getItem('tm_trails');
+    if(!raw)return;
+    const data=JSON.parse(raw);
+    nextId=parseInt(localStorage.getItem('tm_nextId')||'1',10);
+    colorIdx=parseInt(localStorage.getItem('tm_colorIdx')||'0',10);
+    data.forEach(t=>{
+      // Rebuild map objects from saved point data
+      const pts=t.points;
+      const poly=new google.maps.Polyline({
+        path:pts,map:t.visible?gMap:null,strokeColor:t.color,
+        strokeWeight:5,strokeOpacity:.92,
+        icons:[{icon:{path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:2.5,fillColor:t.color,fillOpacity:1,strokeWeight:0},repeat:'100px'}]
+      });
+      const id=t.id;
+      poly.addListener('click',()=>{selTrail(id);openSidebar();});
+      const sm=mkPin(pts[0],t.color,false);
+      const em=mkPin(pts[pts.length-1],t.color,true);
+      if(!t.visible){sm.setMap(null);em.setMap(null);}
+      trails.push({...t,poly,sm,em});
+    });
+    renderList();
+    if(trails.length){
+      // Zoom to show all trails on load
+      const b=new google.maps.LatLngBounds();
+      trails.forEach(t=>t.points.forEach(p=>b.extend(p)));
+      gMap.fitBounds(b,60);
+      showToast(`${trails.length} trail${trails.length>1?'s':''} loaded`);
+    }
+  }catch(e){console.warn('Could not load trails:',e);}
+}
+
+function renameTrail(id){
+  const t=trails.find(x=>x.id===id);if(!t)return;
+  const newName=prompt('Rename trail:',t.name);
+  if(newName===null)return; // cancelled
+  t.name=newName.trim()||t.name;
+  renderList();persistTrails();
+  showToast(`Renamed to "${t.name}"`);
 }
 
 // ── UTILS ──
@@ -951,6 +1033,7 @@ function calcKm(pts){let d=0;for(let i=1;i<pts.length;i++)d+=haversineM(pts[i-1]
 function haversineM(la1,lo1,la2,lo2){const R=6371000,r=x=>x*Math.PI/180,dL=r(la2-la1),dLo=r(lo2-lo1),a=Math.sin(dL/2)**2+Math.cos(r(la1))*Math.cos(r(la2))*Math.sin(dLo/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);}
+function penI(){return`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;}
 function eyeI(){return`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;}
 function eyeOffI(){return`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;}
 function trashI(){return`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;}
